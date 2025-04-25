@@ -1,5 +1,5 @@
 import User from "../models/User";
-
+import bcrypt from "bcryptjs";
 export async function createUser({
   username,
   email,
@@ -8,21 +8,6 @@ export async function createUser({
   picturePath,
   avatarPath,
 }) {
-  // * check params
-  if (!username || !email || !password)
-    throw new Error(" username, email and password are required");
-  // * check username length
-  if (username.length < 3 || username.length > 20)
-    throw new Error(" username must be between 3 and 20 characters");
-  // * check email formt
-  const emailFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailFormat.test(email)) return new Error(" email is not valid");
-  // * check password strength
-  const passwordFormat = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
-  if (!passwordFormat.test(password))
-    throw new Error(
-      " password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number"
-    );
   // check database duplicates
   try {
     const existingUser = await User.findOne({
@@ -31,11 +16,13 @@ export async function createUser({
     if (existingUser) {
       throw new Error("Username or email already exists");
     }
+    // * hashing password
+    const hashingPassword = await bcrypt.hash(password, 10);
     // * create user
     const user = await new User({
       username,
-      emailId: email,
-      password,
+      email: email,
+      password: hashingPassword,
       bio,
       picturePath,
       avatarPath,
@@ -75,8 +62,26 @@ export async function getUserByQuery(object) {
 }
 
 export async function updateUser(id, data) {
-  const user = await user.findById(id);
-  if (!user) throw new Error("User not found");
+  const { username, emailId, password, bio, picturePath, avatarPath } = data;
+  try {
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (emailId) updateData.emailId = emailId;
+    if (password) updateData.password = password;
+    if (bio) updateData.bio = bio;
+    if (picturePath) updateData.picturePath = picturePath;
+    if (avatarPath) updateData.avatarPath = avatarPath;
+    const updatedUser = await User.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+    updateUser.id = updatedUser._id;
+    updateUser.emailVerified = Boolean(updatedUser.emailId);
+    return formatUser(updateUser);
+  } catch (error) {
+    console.log(error);
+    throw new Error("Error updating user");
+  }
 }
 
 function formatUser(user) {
